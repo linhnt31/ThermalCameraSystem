@@ -1,8 +1,8 @@
 # USAGE
-# python main_detect_faces_video.py --prototxt deploy.prototxt.txt --model res10_300x300_ssd_iter_140000.caffemodel
+# python detect_faces_video.py --prototxt deploy.prototxt.txt --model res10_300x300_ssd_iter_140000.caffemodel
 
 # import the necessary packages
-from imutils.video import VideoStream 
+from imutils.video import VideoStream
 import numpy as np
 import argparse
 import imutils
@@ -11,13 +11,12 @@ import cv2
 import time, board, busio
 import adafruit_mlx90640
 import datetime
+import matplotlib.pyplot as plt
 import paho.mqtt.client as mqtt
-import json
-import base64
+import json, base64
 
 from scipy import ndimage
 
-f=open("test.txt","w")
 THINGSBOARD_HOST = '203.162.10.115'
 ACCESS_TOKEN = 'RASPBERRY_PI_DEMO_TOKEN'
 
@@ -50,6 +49,22 @@ mlx_shape = (24, 32)
 mlx_interp_val = 10  
 mlx_interp_shape = (mlx_shape[0] * mlx_interp_val, mlx_shape[1] * mlx_interp_val)  
 
+# hien thi anh nhiet
+
+fig = plt.figure(figsize=(8, 6))  
+# fig.canvas.set_window_title('Hệ thống giám sát nhiệt độ ra/vào')
+fig.canvas.toolbar_visible = False
+ax = fig.add_subplot(1, 2, 1)  
+# ax2 = fig.add_subplot(1, 2, 2)
+fig.subplots_adjust(0.05, 0.05, 0.95, 0.95) 
+
+# Hiển thị ảnh nhiệt
+therm1 = ax.imshow(np.zeros(mlx_interp_shape), interpolation='none',
+                   cmap=plt.cm.bwr, vmin=25, vmax=45)
+fig.canvas.draw()
+ax_background = fig.canvas.copy_from_bbox(ax.bbox)  
+fig.show()  
+
 count = 0
 '''29/10/2021'''
 
@@ -57,19 +72,20 @@ check = 0
 #Thingsboard: temperature and images
 sensor_data={'temperature':0}
 images = {}
-client = mqtt.Client()
-client.username_pw_set(ACCESS_TOKEN)
-client.connect(THINGSBOARD_HOST, 1883)
-client.loop_start()
+# client = mqtt.Client()
+# client.username_pw_set(ACCESS_TOKEN)
+# client.connect(THINGSBOARD_HOST, 1883)
+# client.loop_start()
 
 # loop over the frames from the video stream
 while True:
 	# grab the frame from the threaded video stream and resize it
 	# to have a maximum width of 400 pixels
-	
+	current_time = datetime.datetime.now()
+	img_counter = current_time
 	'''29/10/2021: Get a image and push it to thingsboard'''
 	frame = vs.read()
-	frame = imutils.resize(frame, width=320, height=240)
+	frame = imutils.resize(frame, width=400)
 	# grab the frame dimensions and convert it to a blob
 	#print("Frame: {}".format(frame.shape))  # (300, 400, 3)
 	(h, w) = frame.shape[:2]
@@ -85,9 +101,10 @@ while True:
 	# print("After NN: {}".format(detections.shape)) # (1, 1, 98, 7)
 	#
 	count += 1
+	check += 1
 	# loop over the detections
 	for i in range(0, detections.shape[2]):
-		detections
+		
 
 		# extract the confidence (i.e., probability) associated with the
 		# prediction
@@ -97,68 +114,52 @@ while True:
 		# greater than the minimum confidence
 		if confidence < args["confidence"]:
 			continue
-		
 
 		# compute the (x, y)-coordinates of the bounding box for the
 		# object
 		box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
 		(startX, startY, endX, endY) = box.astype("int")
-	
+
 		# draw the bounding box of the face along with the associated
 		# probability
 		text = "{:.2f}%".format(confidence * 100)
 
 		vface_temp = None
-		# x = startX - 10 if startX - 10 > 10 else startX + 10
-		# y = startY - 10 if startY - 10 > 10 else startY + 10
-		x = startX + 100
-		y = startY + 25
+		x = startX - 10 if startX - 10 > 10 else startX + 10
+		y = startY - 10 if startY - 10 > 10 else startY + 10
 		'''26/10/2021: Modify the size of the frame'''
-		cv2.rectangle(frame, (startX, startY), (endX, endY),
+		cv2.rectangle(frame, (startX, startY), (endX - 20, endY - 50),
 			(0, 0, 255), 2)
-		#cv2.putText(frame, text, (startX, y),
-		#	cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 255), 2)
-		if count % 1 == 0: 
-			# Đọc ảnh nhiệt từ camera
-			frame1 = np.zeros(mlx_shape[0] * mlx_shape[1])
-			mlx.getFrame(frame1)
+		cv2.putText(frame, text, (startX, y),
+			cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 255), 2)
+		# if count % 5 == 0: 
+		# 	# Đọc ảnh nhiệt từ camera
+		# 	frame1 = np.zeros(mlx_shape[0] * mlx_shape[1])
+		# 	mlx.getFrame(frame1)
 
-			# Lật ảnh và phóng ảnh nhiệt
-			data_array = np.fliplr(np.reshape(frame1, mlx_shape))  # reshape, flip data
-			data_array = ndimage.zoom(data_array, mlx_interp_val)  # interpolate
+		# 	# Lật ảnh và phóng ảnh nhiệt
+		# 	data_array = np.fliplr(np.reshape(frame1, mlx_shape))  # reshape, flip data
+		# 	data_array = ndimage.zoom(data_array, mlx_interp_val)  # interpolate
 
-			''' 26/10/2021: This code is to calculate the maximum of temperature (a pixel)'''
-			try:
-				vface_temp = round(np.max(data_array[y:y+h,x:w+x]), 2)
-			except:
-				continue
-			#vface_temp = str(round(np.average(data_array[y:y+h,x:w+x]), 2)) # Average
-			#print('Nhiet do: {} Thoi gian: {}'.format(str(vface_temp), current_time))
-			cv2.putText(frame, str(vface_temp), (startX, y),
-			cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 0), 2)
-			sensor_data['temperature'] = vface_temp;
-			client.publish('v1/devices/me/telemetry',json.dumps(sensor_data));
-			# print(type(json.dumps(sensor_data)))
+		# 	''' 26/10/2021: This code is to calculate the maximum of temperature (a pixel)'''
+		# 	vface_temp = round(np.max(data_array[y:y+h,x:w+x]), 2)
+		# 	#vface_temp = str(round(np.average(data_array[y:y+h,x:w+x]), 2)) # Average
+		# 	#print('Nhiet do: {} Thoi gian: {}'.format(str(vface_temp), current_time))
+		# 	cv2.putText(frame, str(vface_temp), (startX, y),
+		# 	cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 0), 2)
+		# 	sensor_data['temperature'] = vface_temp;
+		# 	client.publish('v1/devices/me/telemetry',json.dumps(sensor_data));
 
 			# if check % 1 == 0:
-			current_time = datetime.datetime.now()
-			img_name = "Person_{}.png".format(current_time)
-			cv2.imwrite(img_name, frame)
-			tbImg = open(img_name,'rb')
-			image_read=tbImg.read()
-			# # print(tbImg)
-			png_as_text = str(base64.b64encode(image_read)).strip()
-			# # print(type(png_as_text))
-			# # print(png_as_text)
-			images["img"] = str(png_as_text)[2:-1]
-			# # f.write(str(images))
-			# f.close()
-			
-			# print(type(images))
-			# print(type(json.dumps(images)))
-			
-			client.publish('v1/devices/me/telemetry', json.dumps(images))
-			
+			# 	img_name = "Person_{}.png".format(img_counter)
+			# 	cv2.imwrite(img_name, frame)
+			# 	tbImg = cv2.imread(img_name)
+			# 	# print(tbImg)
+			# 	png_as_text = base64.b64encode(tbImg).decode('utf-8')
+			# 	# print(png_as_text)
+			# 	images['img'] = str(png_as_text)
+			# 	print(json.dumps(images))
+			# 	client.publish('v1/devices/me/telemetry', json.dumps(images))
 				
 	# show the output frame
 	cv2.imshow("Frame", frame)
