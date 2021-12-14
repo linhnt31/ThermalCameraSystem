@@ -131,7 +131,7 @@ while True:
 			''' 26/10/2021: This code is to calculate the maximum of temperature (a pixel)'''
 			try:
 				vface_temp = round(np.max(data_array[y:y+h,x:w+x]), 2)
-				vface_temp = round((vface_temp - 38 + 2.5) * 1.3 + 36.5, 2)
+				vface_temp = round((vface_temp - 38 + 2.5) * 1.3 + 37.5, 2)
 			except:
 				continue
 			#vface_temp = str(round(np.average(data_array[y:y+h,x:w+x]), 2)) # Average
